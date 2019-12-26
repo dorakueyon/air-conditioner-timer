@@ -1,0 +1,65 @@
+service: google-home-aircon-timer
+
+frameworkVersion: ">=1.28.0 <2.0.0"
+
+plugins:
+  - serverless-step-functions
+
+provider:
+  name: aws
+  runtime: go1.x
+  region: us-east-1
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - states:StartExecution
+        - ssm:GetParameter
+      Resource: "*"
+
+functions:
+  hello:
+    handler: bin/hello
+    events:
+      - http:
+          path: api
+          method: get
+
+  createTimer:
+    handler: bin/create-timer
+    events:
+      - http:
+          path: api
+          method: post
+    environment:
+      TurnOnAirconStepFuncARN: ${self:resources.Outputs.TurnOnAirconStepFunc.Value}
+
+  turnOnAircon:
+    handler: bin/turn-on-aircon
+
+stepFunctions:
+  stateMachines:
+    StateMachine1:
+      name: TurnOnAirconStepFunc
+      definition:
+        StartAt: WaitUntil
+        States:
+          WaitUntil:
+            Type: Wait
+            TimestampPath: $.start_date
+            Next: Main
+          Main:
+            Type: Task
+            Resource:
+              Fn::GetAtt: [turnOnAircon, Arn]
+            End: true
+resources:
+  Outputs:
+    TurnOnAirconStepFunc:
+      Value:
+        Ref: TurnOnAirconStepFunc
+
+package:
+ exclude:
+   - ./**
+ include:
+   - ./bin/**
